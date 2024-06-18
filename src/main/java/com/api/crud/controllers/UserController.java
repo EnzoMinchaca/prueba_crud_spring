@@ -1,7 +1,10 @@
 package com.api.crud.controllers;
 
-import com.api.crud.dto.UserDto;
-import com.api.crud.models.UserModel;
+import com.api.crud.enumer.ERole;
+import com.api.crud.models.dto.UserDto;
+import com.api.crud.models.entities.RoleEntity;
+import com.api.crud.models.entities.UserEntity;
+import com.api.crud.services.RoleService;
 import com.api.crud.services.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -9,7 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
-import java.util.Optional;
+import java.util.HashSet;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/user")
@@ -18,8 +22,11 @@ public class UserController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private RoleService roleService;
+
     @GetMapping
-    public ArrayList<UserModel> getUsers() {
+    public ArrayList<UserEntity> getUsers() {
         return userService.getUsers();
     }
 
@@ -28,7 +35,7 @@ public class UserController {
         if (!userService.existsById(id)) {   //tambien puede ser con un try catch
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
-        UserModel user = userService.getById(id).get();
+        UserEntity user = userService.getById(id).get();
         return new ResponseEntity<>(user, HttpStatus.OK);
     }
 
@@ -38,7 +45,16 @@ public class UserController {
         if(userDto.getFirstName() == null || userDto.getLastName() == null || userDto.getEmail() == null) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
-        UserModel user = new UserModel(userDto.getFirstName(), userDto.getLastName(), userDto.getEmail());
+        if (userService.existsByEmail(userDto.getEmail())) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+        UserEntity user = new UserEntity(userDto.getFirstName(), userDto.getLastName(), userDto.getEmail(), userDto.getPassword());
+        Set<RoleEntity> roles = new HashSet<>();
+        roles.add(roleService.getByRolName(ERole.USER).get());
+        if (userDto.getRoles().contains("admin") || userDto.getRoles().contains("ADMIN")) {
+            roles.add(roleService.getByRolName(ERole.ADMIN).get());
+        }
+        user.setRoles(roles);
         userService.saveUser(user);
         return new ResponseEntity<>(user, HttpStatus.CREATED);
     }
@@ -48,10 +64,20 @@ public class UserController {
         if (!userService.existsById(id)) {   //tambien puede ser con un try catch
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
-        UserModel user = userService.getById(id).get();
+        UserEntity user = userService.getById(id).get();
+        if (!user.getEmail().equals(userDto.getEmail()) && userService.existsByEmail(userDto.getEmail())) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+        Set<RoleEntity> roles = new HashSet<>();
+        roles.add(roleService.getByRolName(ERole.USER).get());
+        if (userDto.getRoles().contains("admin") || userDto.getRoles().contains("ADMIN")) {
+            roles.add(roleService.getByRolName(ERole.ADMIN).get());
+        }
+        user.setRoles(roles);
         user.setFirstName(userDto.getFirstName());
         user.setLastName(userDto.getLastName());
         user.setEmail(userDto.getEmail());
+        user.setPassword(userDto.getPassword());
         userService.saveUser(user);
         return new ResponseEntity<>(user, HttpStatus.OK);
     }
